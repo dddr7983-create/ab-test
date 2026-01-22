@@ -159,44 +159,69 @@ function getPromptDifferences(stateA, stateB) {
     const promptsA = new Map(stateA.prompts.map(p => [p.identifier, p]));
     const promptsB = new Map(stateB.prompts.map(p => [p.identifier, p]));
     
-    for (const [id, promptA] of promptsA) {
+    const getEnabledState = (state, identifier) => {
+        for (const orderEntry of state.promptOrder) {
+            const item = orderEntry.order?.find(e => e.identifier === identifier);
+            if (item !== undefined) {
+                return item.enabled;
+            }
+        }
+        return undefined;
+    };
+    
+    const allIdentifiers = new Set([...promptsA.keys(), ...promptsB.keys()]);
+    
+    for (const orderEntry of stateA.promptOrder) {
+        if (orderEntry.order) {
+            for (const item of orderEntry.order) {
+                allIdentifiers.add(item.identifier);
+            }
+        }
+    }
+    for (const orderEntry of stateB.promptOrder) {
+        if (orderEntry.order) {
+            for (const item of orderEntry.order) {
+                allIdentifiers.add(item.identifier);
+            }
+        }
+    }
+    
+    for (const id of allIdentifiers) {
+        const promptA = promptsA.get(id);
         const promptB = promptsB.get(id);
+        const enabledA = getEnabledState(stateA, id);
+        const enabledB = getEnabledState(stateB, id);
         
-        if (!promptB) {
-            differences.push({ type: 'removed', identifier: id, name: promptA.name });
+        const name = promptA?.name || promptB?.name || id;
+        
+        if (promptA && !promptB) {
+            differences.push({ type: 'removed', identifier: id, name });
             continue;
         }
         
-        if (promptA.content !== promptB.content) {
+        if (!promptA && promptB) {
+            differences.push({ type: 'added', identifier: id, name });
+            continue;
+        }
+        
+        if (promptA && promptB && promptA.content !== promptB.content) {
             differences.push({ 
                 type: 'content_changed', 
                 identifier: id, 
-                name: promptA.name,
+                name,
                 contentA: promptA.content,
                 contentB: promptB.content
             });
         }
         
-        const orderA = stateA.promptOrder.find(o => o.order?.some(e => e.identifier === id));
-        const orderB = stateB.promptOrder.find(o => o.order?.some(e => e.identifier === id));
-        
-        const enabledA = orderA?.order?.find(e => e.identifier === id)?.enabled;
-        const enabledB = orderB?.order?.find(e => e.identifier === id)?.enabled;
-        
-        if (enabledA !== enabledB) {
+        if (enabledA !== undefined && enabledB !== undefined && enabledA !== enabledB) {
             differences.push({
                 type: 'enabled_changed',
                 identifier: id,
-                name: promptA.name,
+                name,
                 enabledA,
                 enabledB
             });
-        }
-    }
-    
-    for (const [id, promptB] of promptsB) {
-        if (!promptsA.has(id)) {
-            differences.push({ type: 'added', identifier: id, name: promptB.name });
         }
     }
     
