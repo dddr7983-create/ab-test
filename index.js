@@ -159,14 +159,17 @@ function getPromptDifferences(stateA, stateB) {
     const promptsA = new Map(stateA.prompts.map(p => [p.identifier, p]));
     const promptsB = new Map(stateB.prompts.map(p => [p.identifier, p]));
     
-    const getEnabledState = (state, identifier) => {
+    const getAllEnabledStates = (state, identifier) => {
+        const states = new Map();
         for (const orderEntry of state.promptOrder) {
-            const item = orderEntry.order?.find(e => e.identifier === identifier);
-            if (item !== undefined) {
-                return item.enabled;
+            if (!orderEntry.order) continue;
+            const charId = orderEntry.character_id || 'default';
+            const item = orderEntry.order.find(e => e.identifier === identifier);
+            if (item) {
+                states.set(charId, !!item.enabled);
             }
         }
-        return undefined;
+        return states;
     };
     
     const allIdentifiers = new Set([...promptsA.keys(), ...promptsB.keys()]);
@@ -186,11 +189,11 @@ function getPromptDifferences(stateA, stateB) {
         }
     }
     
+    const processedEnabledChanges = new Set();
+    
     for (const id of allIdentifiers) {
         const promptA = promptsA.get(id);
         const promptB = promptsB.get(id);
-        const enabledA = getEnabledState(stateA, id);
-        const enabledB = getEnabledState(stateB, id);
         
         const name = promptA?.name || promptB?.name || id;
         
@@ -214,14 +217,28 @@ function getPromptDifferences(stateA, stateB) {
             });
         }
         
-        if (enabledA !== undefined && enabledB !== undefined && enabledA !== enabledB) {
-            differences.push({
-                type: 'enabled_changed',
-                identifier: id,
-                name,
-                enabledA,
-                enabledB
-            });
+        const enabledStatesA = getAllEnabledStates(stateA, id);
+        const enabledStatesB = getAllEnabledStates(stateB, id);
+        
+        const allCharIds = new Set([...enabledStatesA.keys(), ...enabledStatesB.keys()]);
+        
+        for (const charId of allCharIds) {
+            const enabledA = enabledStatesA.get(charId);
+            const enabledB = enabledStatesB.get(charId);
+            
+            if (enabledA !== undefined && enabledB !== undefined && enabledA !== enabledB) {
+                const key = `${id}:${charId}`;
+                if (!processedEnabledChanges.has(key)) {
+                    processedEnabledChanges.add(key);
+                    differences.push({
+                        type: 'enabled_changed',
+                        identifier: id,
+                        name,
+                        enabledA,
+                        enabledB
+                    });
+                }
+            }
         }
     }
     
@@ -252,10 +269,23 @@ function createSnapshotCard(snapshot, index, isSelected = false) {
                 <span>${new Date(snapshot.timestamp).toLocaleString()}</span>
             </div>
             <div class="abtest-snapshot-preview">
-                ${snapshot.prompts.filter(p => !p.marker && !p.system_prompt).length} prompts
+                ${countEnabledPrompts(snapshot)} prompts enabled
             </div>
         </div>
     `;
+}
+
+function countEnabledPrompts(snapshot) {
+    let count = 0;
+    for (const orderEntry of snapshot.promptOrder) {
+        if (!orderEntry.order) continue;
+        for (const item of orderEntry.order) {
+            if (item.enabled) {
+                count++;
+            }
+        }
+    }
+    return count;
 }
 
 function renderDifferences(differences) {
