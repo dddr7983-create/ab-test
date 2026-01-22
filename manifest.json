@@ -1,0 +1,12 @@
+{
+    "display_name": "A/B Test",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "ST Extension",
+    "version": "1.0.0",
+    "homePage": "https://github.com/dddr7983-create/ab-test",
+    "generate_interceptor": false
+}
